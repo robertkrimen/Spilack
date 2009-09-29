@@ -4,11 +4,12 @@ use strict;
 use warnings;
 
 use DateTimeX::Easy qw/datetime/;
+use DBIx::SQLite::Deploy;
 use Carp;
 
 my $tmp;
 
-sub parse_month {
+sub _parse_month {
     my $class = shift;
     my $input = shift;
 
@@ -22,8 +23,9 @@ sub parse {
     my $class = shift;
     my $input = shift;
 
-    my @result;
+    my @output;
     my $category = '';
+
     for (split m/\n/, $input) {
 
         next if m/^\s*$/;
@@ -36,9 +38,9 @@ sub parse {
             my ($range, $amount, $description) = split m/\s+/, $_, 3;
             my ($start, $stop) = $range =~ m/^(\w{3}\d{2})(?:\s*-\s*(\w{3}\d{2}))?$/;
 
-            croak "Unable to parse start $tmp" unless $start = $class->parse_month( $tmp = $start );
+            croak "Unable to parse start $tmp" unless $start = $class->_parse_month( $tmp = $start );
             if ( $stop ) {
-                croak "Unable to parse stop $tmp" unless $stop = $class->parse_month( $tmp = $stop );
+                croak "Unable to parse stop $tmp" unless $stop = $class->_parse_month( $tmp = $stop );
                 ( $start, $stop ) = ( $stop, $start ) if $start->epoch > $stop->epoch;
                 $stop = $stop->ymd;
             }
@@ -48,11 +50,68 @@ sub parse {
 #            croak "Unable to parse start $tmp" unless (($start = datetime( $tmp = $start )) && $start = $start->ymd);
 #            croak "Unable to parse stop $tmp" if $stop && ! (($stop = datetime( $tmp = $stop )) && $stop = $stop->ymd);
             
-            push @result, { start => $start, stop => $stop, amount => $amount, description => $description };
+            push @output, { start => $start, stop => $stop, amount => $amount, description => $description };
 
         }
     }
-    return \@result;
+
+    return \@output;
+}
+
+sub _deploy {
+    my $class = shift;
+
+    my $file = 'spilack.sqlite';
+    unlink $file;
+    my $deploy = DBIx::SQLite::Deploy->deploy( $file => <<_END_ );
+[% PRIMARY_KEY = "INTEGER PRIMARY KEY AUTOINCREMENT" %]
+[% CLEAR %]
+---
+CREATE TABLE payment (
+
+    id                  [% PRIMARY_KEY %],
+
+    category            TEXT,
+    month               DATE,
+    amount              INTEGER,
+    description         TEXT
+);
+_END_
+
+    return $deploy;
+}
+
+sub _unroll {
+    my $class = shift;
+    my $input = shift;
+
+    $input = $class->parse( $input );
+
+    my @output;
+
+    for my $entry (@$input) {
+        my ( $start, $stop, $category, $amount, $description ) = @$entry{qw/ start stop category amount description /};
+
+        $stop = $start unless $stop;
+
+        ( $start, $stop ) = ( datetime( $start ), datetime( $stop ) );
+        my $cursor = $start->clone;
+        while ( 1 ) {
+            push @output, { month => $cursor->ymd, amount => $amount, description => $description };
+            last if $cursor->ymd eq $stop->ymd;
+            $cursor->add( months => 1 );
+        }
+    }
+
+    return \@output;
+}
+
+sub load {
+    my $class = shift;
+    my $input = shift;
+
+    my $deploy = $class->_deploy;
+    
 }
 
 1;
