@@ -4,17 +4,22 @@ use strict;
 use warnings;
 
 use DateTimeX::Easy qw/datetime/;
+use YAML::Tiny;
+use Spilack;
 
 my $category;
-while (<STDIN>) {
+my $input = join '', <STDIN>;
 
-    next if m/^\s*$/;
-    next if m/^\s*#/;
-    
-    if (m/^\s*category:\s*(.*)/) {
-        $category = $1;
-    }
-    else {
+my $unroll = Spilack->_unroll( $input );
 
-    }
+#print YAML::Tiny->new( $unroll )->write_string, "\n";
+
+my $tally = Spilack->tally( $input );
+
+my $total = 0;
+for my $entry (values %$tally) {
+    my ( $description, $amount ) = @$entry{ qw/ description amount / };
+    print "$description: \$", (sprintf "%.2f", $amount / 100), "\n";
+    $total += $amount;
 }
+print "Total: \$", (sprintf "%.2f", $total / 100), "\n";

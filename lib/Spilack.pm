@@ -50,7 +50,7 @@ sub parse {
 #            croak "Unable to parse start $tmp" unless (($start = datetime( $tmp = $start )) && $start = $start->ymd);
 #            croak "Unable to parse stop $tmp" if $stop && ! (($stop = datetime( $tmp = $stop )) && $stop = $stop->ymd);
             
-            push @output, { start => $start, stop => $stop, amount => $amount, description => $description };
+            push @output, { category => $category, start => $start, stop => $stop, amount => $amount, description => $description };
 
         }
     }
@@ -91,13 +91,14 @@ sub _unroll {
 
     for my $entry (@$input) {
         my ( $start, $stop, $category, $amount, $description ) = @$entry{qw/ start stop category amount description /};
+        $amount *= 100;
 
         $stop = $start unless $stop;
 
         ( $start, $stop ) = ( datetime( $start ), datetime( $stop ) );
         my $cursor = $start->clone;
         while ( 1 ) {
-            push @output, { month => $cursor->ymd, amount => $amount, description => $description };
+            push @output, { category => $category, month => $cursor->ymd, amount => $amount, description => $description };
             last if $cursor->ymd eq $stop->ymd;
             $cursor->add( months => 1 );
         }
@@ -111,7 +112,23 @@ sub load {
     my $input = shift;
 
     my $deploy = $class->_deploy;
-    
+}
+
+sub tally {
+    my $class = shift;
+    my $input = shift;
+
+    $input = $class->_unroll( $input );
+
+    my %tally;
+
+    for my $entry (@$input) {
+        my ( $category, $amount, $description ) = @$entry{qw/ category amount description /};
+        my $sum = $tally{ $description} ||= { description => $description, amount => 0, category => $category };
+        $sum->{amount} += $amount;
+    }
+
+    return \%tally;
 }
 
 1;
