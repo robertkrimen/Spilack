@@ -5,18 +5,20 @@ use warnings;
 
 use DateTimeX::Easy qw/datetime/;
 use DBIx::SQLite::Deploy;
+use DBIx::Simple;
 use Carp;
 
 my $tmp;
+my %month_map = map { $_ => $tmp++ } qw/ Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec /;
 
 sub _parse_month {
     my $class = shift;
     my $input = shift;
 
     my ($month, $year) = $input =~ m/^(\w{3})(\d{2})$/;
-    return unless $month = (datetime $month)->month;
+    croak "Unable to parse $input ($tmp)" unless defined ($month = $month_map{$tmp = $month});
     
-    return DateTime->new( month => $month, year => 2000 + $year );
+    return DateTime->new( month => $month + 1, year => 2000 + $year );
 }
 
 sub parse {
@@ -72,9 +74,11 @@ CREATE TABLE payment (
     id                  [% PRIMARY_KEY %],
 
     category            TEXT,
-    month               DATE,
-    amount              INTEGER,
-    description         TEXT
+    month               DATE NOT NULL,
+    amount              INTEGER NOT NULL,
+    description         TEXT NOT NULL,
+
+    UNIQUE ( month, description )
 );
 _END_
 
@@ -91,7 +95,7 @@ sub _unroll {
 
     for my $entry (@$input) {
         my ( $start, $stop, $category, $amount, $description ) = @$entry{qw/ start stop category amount description /};
-        $amount *= 100;
+#        $amount *= 100;
 
         $stop = $start unless $stop;
 
@@ -112,6 +116,17 @@ sub load {
     my $input = shift;
 
     my $deploy = $class->_deploy;
+    my $db = DBIx::Simple->connect( $deploy->information );
+
+    my $unrolled = $class->_unroll( $input );
+
+    for my $payment (@$unrolled) {
+        my ( $category, $amount, $description, $month ) = @$payment{qw/ category amount description month /};
+        $db->insert( payment => { category => $category, amount => $amount, description => $description, month => $month } ) or
+            croak $db->error;
+    }
+
+    return $db;
 }
 
 sub tally {

@@ -1,4 +1,4 @@
-.PHONY: all test clean distclean dist
+.PHONY: all test clean distclean dist load run
 
 all: test
 
@@ -21,3 +21,9 @@ clean: distclean
 reset: clean
 	perl Makefile.PL
 	$(MAKE) test
+
+load:
+	cat input | ./spilack
+
+run:
+	cat plan | sqlite3 ./spilack.sqlite

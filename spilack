@@ -14,12 +14,28 @@ my $unroll = Spilack->_unroll( $input );
 
 #print YAML::Tiny->new( $unroll )->write_string, "\n";
 
-my $tally = Spilack->tally( $input );
+if (0) {
+    my $tally = Spilack->tally( $input );
 
-my $total = 0;
-for my $entry (values %$tally) {
-    my ( $description, $amount ) = @$entry{ qw/ description amount / };
-    print "$description: \$", (sprintf "%.2f", $amount / 100), "\n";
-    $total += $amount;
+    my $total = 0;
+    for my $entry (values %$tally) {
+        my ( $description, $amount ) = @$entry{ qw/ description amount / };
+        print "$description: \$", (sprintf "%.2f", $amount / 100), "\n";
+        $total += $amount;
+    }
+    print "Total: \$", (sprintf "%.2f", $total / 100), "\n";
 }
-print "Total: \$", (sprintf "%.2f", $total / 100), "\n";
+
+#my $result;
+#my $db = Spilack->load( $input );
+#$result = $db->select( payment => [ "MIN( month )", "MAX( month )" ] );
+##$result = $db->select( payment => [ '*' ] );
+#warn $result->list;
+
+my ( $result, $from, $to );
+my $db = Spilack->load( $input );
+
+$from = '2008-01-01';
+$to = '2008-06-01';
+$result = $db->select( payment => [ "SUM( amount )" ], [ month => { -between => [ $from, $to ] } ] );
+print $result->list, "\n";
